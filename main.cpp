@@ -1,6 +1,7 @@
-#include <math.h>   // smallpt, a Path Tracer by Kevin Beason, 2008 
-#include <stdlib.h> // Make : g++ -O3 -fopenmp smallpt.cpp -o smallpt 
-#include <stdio.h>  //        Remove "-fopenmp" for g++ version < 4.2 
+#include <math.h>   
+#include <stdlib.h> 
+#include <stdio.h> 
+#include <string.h>
 #include <iostream>
 #include <vector>
 
@@ -302,6 +303,75 @@ Vec radiance(const Ray &r, int depth, unsigned short *Xi){
 	}
 } 
 
+void save_to_bmp(int w, int h, char *filename, Vec *data) {
+	//int w = 100; /* Put here what ever width you want */
+    //int h = 100; /* Put here what ever height you want */
+
+
+
+    FILE *f;
+    unsigned char *img = NULL;
+    int filesize = 54 + 3*w*h;  //w is your image width, h is image height, both int
+    if( img )
+            free( img );
+
+
+    img = (unsigned char *)malloc(3*w*h);
+    memset(img,0,sizeof(img));
+    int x;
+    int y;
+    int r;
+    int g;
+    int b;
+
+    for(int i=0; i<w; i++)
+    {
+            for(int j=0; j<h; j++)
+            {
+                    x=i; y=(h-1)-j;
+                    r = toInt(data[x + y*w].x); 
+					g = toInt(data[x + y*w].y); 
+					b = toInt(data[x + y*w].z);
+
+                    if (r > 255) r = 255;
+                    if (g > 255) g = 255;
+                    if (b > 255) b = 255;
+
+                    img[(x+y*w)*3+2] = (unsigned char)(r);
+                    img[(x+y*w)*3+1] = (unsigned char)(g);
+                    img[(x+y*w)*3+0] = (unsigned char)(b);
+            }
+    }
+
+    unsigned char bmpfileheader[14] = {'B','M', 0,0,0,0, 0,0, 0,0, 54,0,0,0};
+    unsigned char bmpinfoheader[40] = {40,0,0,0, 0,0,0,0, 0,0,0,0, 1,0, 24,0};
+    unsigned char bmppad[3] = {0,0,0};
+
+    bmpfileheader[ 2] = (unsigned char)(filesize    );
+    bmpfileheader[ 3] = (unsigned char)(filesize>> 8);
+    bmpfileheader[ 4] = (unsigned char)(filesize>>16);
+    bmpfileheader[ 5] = (unsigned char)(filesize>>24);
+
+    bmpinfoheader[ 4] = (unsigned char)(       w    );
+    bmpinfoheader[ 5] = (unsigned char)(       w>> 8);
+    bmpinfoheader[ 6] = (unsigned char)(       w>>16);
+    bmpinfoheader[ 7] = (unsigned char)(       w>>24);
+    bmpinfoheader[ 8] = (unsigned char)(       h    );
+    bmpinfoheader[ 9] = (unsigned char)(       h>> 8);
+    bmpinfoheader[10] = (unsigned char)(       h>>16);
+    bmpinfoheader[11] = (unsigned char)(       h>>24);
+
+    f = fopen(filename,"wb");
+    fwrite(bmpfileheader,1,14,f);
+    fwrite(bmpinfoheader,1,40,f);
+    for(int i=0; i<h; i++)
+    {
+            fwrite(img+(w*(h-i-1)*3),3,w,f);
+            fwrite(bmppad,1,(4-(w*3)%4)%4,f);
+    }
+    fclose(f);
+}
+
 
 int main(int argc, char *argv[]){ 
 	if (argc < 3) {
@@ -314,8 +384,8 @@ int main(int argc, char *argv[]){
 	//int w = 300;
 	//int h = 210;
 
-	int w = 1024;
-	int h = 768;
+	int w = 600;
+	int h = 512;
 	int samps = atoi(argv[1])/4 ; // # samples
 	std::cout << samps << std::endl;
 
@@ -327,24 +397,29 @@ int main(int argc, char *argv[]){
 	#pragma omp parallel for schedule(dynamic, 1) private(r)       // OpenMP 
 	for (int y = 0; y < h; y++){                       // Loop over image rows 
 		fprintf(stderr,"\rRendering (%d spp) %5.2f%%",samps * 4,100.*y/(h - 1)); 
-		for (unsigned short x = 0, Xi[3]={0,0,y * y * y}; x < w; x++)   // Loop cols 
-			for (int sy = 0, i=(h - y - 1)*w + x; sy < 2; sy++)     // 2x2 subpixel rows 
-			for (int sx = 0; sx < 2; sx++, r = Vec()){        // 2x2 subpixel cols 
-				for (int s = 0; s < samps; s++){ 
-					double r1 = 2 * erand48(Xi), dx = r1 < 1 ? sqrt(r1)-1: 1 - sqrt(2 - r1); 
-					double r2 = 2 * erand48(Xi), dy = r2 < 1 ? sqrt(r2)-1: 1 - sqrt(2 - r2); 
-					Vec d = cx*( ( (sx+.5 + dx)/2 + x)/w - .5) + 
-								 cy*( ( (sy+.5 + dy)/2 + y)/h - .5) + cam.d; 
-					Vec rad = radiance(Ray(cam.o + d * 140,d.norm()),0,Xi)*(1./samps); 
-					r = r + rad;
+		for (unsigned short x = 0, Xi[3] = {0, 0, y * y * y}; x < w; x++) {   // Loop cols 
+			for (int sy = 0, i = (h - y - 1) * w + x; sy < 2; sy++) {   // 2x2 subpixel rows 
+				for (int sx = 0; sx < 2; sx++, r = Vec()) {        // 2x2 subpixel cols 
+					for (int s = 0; s < samps; s++) { 
+						double r1 = 2 * erand48(Xi), dx = r1 < 1 ? sqrt(r1)-1: 1 - sqrt(2 - r1); 
+						double r2 = 2 * erand48(Xi), dy = r2 < 1 ? sqrt(r2)-1: 1 - sqrt(2 - r2); 
 
-				} // Camera rays are pushed ^^^^^ forward to start in interior 
-				c[i] = c[i] + Vec(clamp(r.x),clamp(r.y),clamp(r.z))*.25; 
-			} 
+						Vec d = cx*( ( (sx+.5 + dx)/2 + x)/w - .5) + 
+									 cy*( ( (sy+.5 + dy)/2 + y)/h - .5) + cam.d; 
+						Vec rad = radiance(Ray(cam.o + d * 140,d.norm()),0,Xi)*(1./samps); 
+						r = r + rad;
+
+					} // Camera rays are pushed ^^^^^ forward to start in interior 
+					c[i] = c[i] + Vec(clamp(r.x),clamp(r.y),clamp(r.z))*.25; 
+				}
+			}
+		}
 	} 
 
-	FILE *f = fopen(argv[2], "w");         // Write image to PPM file. 
+	/*FILE *f = fopen(argv[2], "w");         // Write image to PPM file. 
 	fprintf(f, "P3\n %d %d\n %d\n", w, h, 255); 
 	for (int i = 0; i < w * h; i++) 
-		fprintf(f,"%d %d %d ", toInt(c[i].x), toInt(c[i].y), toInt(c[i].z)); 
+		fprintf(f,"%d %d %d ", toInt(c[i].x), toInt(c[i].y), toInt(c[i].z)); */
+
+	save_to_bmp(w, h, argv[2], c);
  } 
