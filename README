@@ -1,0 +1,6 @@
+Иванов Д.А. 522 группа
+
+Компляция: g++ -O3 -fopenmp main.cpp -o prog
+Запуск: ./prog samples output_file, где samples -число семплов, output_file - файл для записи
+
+Также, приложен пример работы программы.
